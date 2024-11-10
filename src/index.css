@@ -4,6 +4,7 @@
 
 .cdx-quote {
   margin: 0;
+  padding-left: 15px;
 }
 
 .cdx-quote__text {
@@ -36,4 +37,10 @@
 
 .cdx-quote-settings .cdx-settings-button {
   width: 50%;
+}
+
+.cdx-quote__border-color-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

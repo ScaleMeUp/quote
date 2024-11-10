@@ -4,6 +4,9 @@
 import "./index.css";
 
 import { IconAlignLeft, IconAlignCenter, IconQuote } from "@codexteam/icons";
+import { Icon as BorderColorIcon } from "./icons/border-color";
+import { Icon as BorderColorFilledIcon } from "./icons/border-color-filled";
+
 import { make } from "@editorjs/dom";
 import type { API, BlockAPI, BlockTool, ToolConfig } from "@editorjs/editorjs";
 import { MenuConfig } from "@editorjs/editorjs/types/tools";
@@ -30,6 +33,19 @@ export interface QuoteConfig extends ToolConfig {
    * Default alignment for the quote.
    */
   defaultAlignment: Alignment;
+
+  /**
+   * Default border color for the quote.
+   */
+  defaultBorderColor: string;
+
+  /**
+   * Border colors for the quote.
+   */
+  borderColors: {
+    name: string;
+    color: string;
+  }[];
 }
 
 /**
@@ -54,6 +70,11 @@ export interface QuoteData {
    * The alignment of the quote.
    */
   alignment: Alignment;
+
+  /**
+   * The border color of the quote.
+   */
+  borderColor: string;
 }
 
 /**
@@ -115,6 +136,10 @@ interface QuoteCSS {
    * Quote CSS Class
    */
   caption: string;
+  /**
+   * Quote CSS Class
+   */
+  borderColorIconWrapper: string;
 }
 
 /**
@@ -163,6 +188,18 @@ export default class Quote implements BlockTool {
    * Quote Tool's CSS classes
    */
   private _CSS: QuoteCSS;
+  /**
+   * Default border color for the quote.
+   */
+  private _defaultBorderColor: string;
+  /**
+   * Border colors for the quote.
+   */
+  private _borderColors: QuoteConfig['borderColors'];
+  /**
+   * Root element for the quote.
+   */
+  private _element: HTMLElement | null;
 
   /**
    * Render plugin`s main Element and fill it with saved data
@@ -181,8 +218,12 @@ export default class Quote implements BlockTool {
 
     this._quotePlaceholder =
       config.quotePlaceholder || Quote.DEFAULT_QUOTE_PLACEHOLDER;
+
     this._captionPlaceholder =
       config.captionPlaceholder || Quote.DEFAULT_CAPTION_PLACEHOLDER;
+
+    this._defaultBorderColor = config.defaultBorderColor || Quote.DEFAULT_BORDER_COLOR;
+    this._borderColors = config.borderColors || Quote.DEFAULT_BORDER_COLORS;
 
     this._data = {
       text: data.text || "",
@@ -192,15 +233,21 @@ export default class Quote implements BlockTool {
           data.alignment) ||
         config.defaultAlignment ||
         DEFAULT_ALIGNMENT,
+      borderColor: data.borderColor || this._defaultBorderColor,
     };
+
     this._CSS = {
       baseClass: this.api.styles.block,
       wrapper: "cdx-quote",
       text: "cdx-quote__text",
       input: this.api.styles.input,
       caption: "cdx-quote__caption",
+      borderColorIconWrapper: "cdx-quote__border-color-icon-wrapper",
     };
+
     this._block = block;
+
+    this._element = null
   }
 
   /**
@@ -266,6 +313,31 @@ export default class Quote implements BlockTool {
     return "Enter a caption";
   }
 
+  /**
+   * Default border color for the quote.
+   *
+   * @public
+   * @returns {string}
+   *
+   */
+  static get DEFAULT_BORDER_COLOR(): string {
+    return '#000000';
+  }
+
+    /**
+     * Default border colors for the quote.
+     *
+     * @public
+     * @returns {QuoteConfig['borderColors']}
+     */
+    static get DEFAULT_BORDER_COLORS(): QuoteConfig['borderColors'] {
+        return [
+          {
+            name: 'Black',
+            color: '#000000',
+          }
+        ];
+    }
 
   /**
    * Default quote alignment
@@ -312,6 +384,7 @@ export default class Quote implements BlockTool {
       text: "cdx-quote__text",
       input: this.api.styles.input,
       caption: "cdx-quote__caption",
+      borderColorIconWrapper: "cdx-quote__border-color-icon-wrapper",
     };
   }
 
@@ -320,7 +393,7 @@ export default class Quote implements BlockTool {
    *
    * @returns {*[]}
    */
-  get settings(): { name: Alignment; icon: string }[] {
+  get alignmentSettings(): { name: Alignment; icon: string }[] {
     return [
       {
         name: Alignment.Left,
@@ -342,11 +415,15 @@ export default class Quote implements BlockTool {
     const container = make("blockquote", [
       this._CSS.baseClass,
       this._CSS.wrapper,
-    ]);
+    ], {
+      style: `border-left: 5px solid ${this._data.borderColor}`,
+    });
+
     const quote = make("div", [this._CSS.input, this._CSS.text], {
       contentEditable: !this.readOnly,
       innerHTML: this._data.text,
     });
+
     const caption = make("div", [this._CSS.input, this._CSS.caption], {
       contentEditable: !this.readOnly,
       innerHTML: this._data.caption,
@@ -357,6 +434,9 @@ export default class Quote implements BlockTool {
 
     container.appendChild(quote);
     container.appendChild(caption);
+
+    this._element = container;
+
     return container;
   }
 
@@ -382,7 +462,12 @@ export default class Quote implements BlockTool {
   static get sanitize() {
     return {
       text: {
+        span: true,
         br: true,
+        a: true,
+        i: true,
+        b: true,
+        s: true,
       },
       caption: {
         br: true,
@@ -403,13 +488,52 @@ export default class Quote implements BlockTool {
     const capitalize = (str: string) =>
       str ? str[0].toUpperCase() + str.slice(1) : str;
 
-    return this.settings.map((item) => ({
+    const alignmentOptions = this.alignmentSettings.map((item) => ({
       icon: item.icon,
-      label: this.api.i18n.t(`Align ${capitalize(item.name)}`),
-      onActivate: () => this._toggleTune(item.name),
+      title: this.api.i18n.t(capitalize(item.name)),
+      onActivate: () => this._toggleAlignmentTune(item.name),
       isActive: this._data.alignment === item.name,
       closeOnActivate: true,
     }));
+
+    const borderColors = this._borderColors.map((item) => {
+      const icon = `
+        <span 
+            class="${this._CSS.borderColorIconWrapper}"
+            style="color: ${item.color};"
+        >
+           ${BorderColorFilledIcon}
+        </span>
+      `
+
+      return {
+        icon: icon,
+        title: this.api.i18n.t(item.name),
+        onActivate: () => this._toggleBorderColor(item.color),
+        isActive: this._data.borderColor === item.color,
+        closeOnActivate: true,
+      };
+    })
+
+    return [
+        {
+          name: 'alignment',
+          title: 'Alignment',
+          icon: IconAlignLeft,
+          children: {
+            items: alignmentOptions
+          },
+        },
+
+        {
+          name: 'border',
+          icon: BorderColorIcon,
+          title: 'Border color',
+          children: {
+            items: borderColors,
+          },
+        },
+    ];
   }
 
   /**
@@ -418,10 +542,27 @@ export default class Quote implements BlockTool {
    * @param {string} tune - alignment
    * @private
    */
-  _toggleTune(tune: Alignment) {
+  _toggleAlignmentTune(tune: Alignment) {
     this._data.alignment = tune;
 
     // Dispatch change if quoteElement already exists
-      this._block.dispatchChange();
+    this._block.dispatchChange();
+  }
+
+  /**
+   * Toggle quote's border color
+   *
+   * @param {string} color - border color
+   * @private
+   */
+  _toggleBorderColor(color: string) {
+    this._data.borderColor = color;
+
+    if (this._element) {
+      this._element.style.borderLeft = `5px solid ${color}`;
+    }
+
+    // Dispatch change if quoteElement already exists
+    this._block.dispatchChange();
   }
 }
