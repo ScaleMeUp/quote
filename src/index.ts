@@ -462,7 +462,7 @@ export default class Quote implements BlockTool {
   static get sanitize() {
     return {
       text: {
-        span: true,
+        font: true,
         br: true,
         a: true,
         i: true,

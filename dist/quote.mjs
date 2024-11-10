@@ -1002,7 +1002,7 @@ class d {
   static get sanitize() {
     return {
       text: {
-        span: !0,
+        font: !0,
         br: !0,
         a: !0,
         i: !0,
